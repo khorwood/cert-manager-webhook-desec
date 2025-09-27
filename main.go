@@ -62,7 +62,6 @@ func (c *desecDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 	rrset, err := desecClient.Records.Get(context.Background(), domainName, subName, "TXT")
 	if err != nil {
 		klog.Info(err)
-		klog.Flush()
 	}
 
 	if rrset == nil {
@@ -96,6 +95,7 @@ func (c *desecDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 		}
 	}
 
+	klog.Flush()
 	return nil
 }
 
@@ -103,6 +103,7 @@ func (c *desecDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	desecClient, err := c.getDesecClient(ch)
 	if err != nil {
 		klog.Error(err)
+		klog.Flush()
 		return err
 	}
 
@@ -112,8 +113,12 @@ func (c *desecDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	klog.Infof("Calling Get: %s %s %s", domainName, subName, "TXT")
 	rrset, err := desecClient.Records.Get(context.Background(), domainName, subName, "TXT")
 	if err != nil {
-		klog.Error(err)
-		return err
+		klog.Info(err)
+	}
+
+	if rrset == nil {
+		klog.Flush()
+		return nil
 	}
 
 	records := slices.DeleteFunc(rrset.Records, func(s string) bool {
@@ -125,6 +130,7 @@ func (c *desecDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 		err := desecClient.Records.Delete(context.Background(), domainName, subName, "TXT")
 		if err != nil {
 			klog.Error(err)
+			klog.Flush()
 			return err
 		}
 	} else {
@@ -134,10 +140,12 @@ func (c *desecDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 		})
 		if err != nil {
 			klog.Error(err)
+			klog.Flush()
 			return err
 		}
 	}
 
+	klog.Flush()
 	return nil
 }
 
@@ -145,6 +153,7 @@ func (c *desecDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, stopC
 	cl, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
 		klog.Error(err)
+		klog.Flush()
 		return err
 	}
 
