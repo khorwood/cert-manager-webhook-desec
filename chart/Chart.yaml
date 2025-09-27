@@ -1,0 +1,10 @@
+apiVersion: v2
+name: cert-manager-webhook-desec
+description: A cert-manager DNS01 challenge solver for deSEC
+
+appVersion: 0.0.0-template
+version: 0.0.0-template
+
+icon: https://desec.io/favicon.svg
+sources:
+- https://github.com/khorwood/cert-manager-webhook-desec

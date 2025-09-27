@@ -1,41 +1,101 @@
 package main
 
 import (
+	"encoding/base64"
+	"errors"
 	"os"
 	"testing"
+	"text/template"
+	"time"
 
 	acmetest "github.com/cert-manager/cert-manager/test/acme"
-
-	"github.com/cert-manager/webhook-example/example"
 )
 
 var (
-	zone = os.Getenv("TEST_ZONE_NAME")
+	token        = os.Getenv("DESEC_TOKEN")
+	zone         = os.Getenv("TEST_ZONE_NAME")
+	manifestPath = "testdata"
 )
 
+func createConfig() error {
+	config := []byte(`{
+	"apiTokenSecretRef": {
+		"name": "desec-token",
+		"key": "token"
+	}
+}
+`)
+	err := os.WriteFile(manifestPath+"/config.json", config, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createSecret() error {
+	if token == "" {
+		return errors.New("DESEC_TOKEN should be defined")
+	}
+	apiTokenBase64 := base64.StdEncoding.EncodeToString([]byte(token))
+
+	secretTmpl := `---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: desec-token
+type: Opaque
+data:
+  token: {{.}}
+`
+	secretFile, err := os.Create(manifestPath + "/secret.yaml")
+	if err != nil {
+		return err
+	}
+	defer secretFile.Close()
+
+	tmpl, err := template.New("secret.yaml").Parse(secretTmpl)
+	if err != nil {
+		return err
+	}
+	err = tmpl.Execute(secretFile, apiTokenBase64)
+
+	return err
+}
+
 func TestRunsSuite(t *testing.T) {
-	// The manifest path should contain a file named config.json that is a
-	// snippet of valid configuration that should be included on the
-	// ChallengeRequest passed as part of the test cases.
-	//
+	if len(zone) == 0 {
+		t.Fatal("Can't run tests on empty zone, please define TEST_ZONE_NAME")
+	}
 
-	// Uncomment the below fixture when implementing your custom DNS provider
-	//fixture := acmetest.NewFixture(&customDNSProviderSolver{},
-	//	acmetest.SetResolvedZone(zone),
-	//	acmetest.SetAllowAmbientCredentials(false),
-	//	acmetest.SetManifestPath("testdata/my-custom-solver"),
-	//	acmetest.SetBinariesPath("_test/kubebuilder/bin"),
-	//)
-	solver := example.New("59351")
-	fixture := acmetest.NewFixture(solver,
-		acmetest.SetResolvedZone("example.com."),
-		acmetest.SetManifestPath("testdata/my-custom-solver"),
-		acmetest.SetDNSServer("127.0.0.1:59351"),
-		acmetest.SetUseAuthoritative(false),
+	if _, err := os.Stat(manifestPath); err != nil {
+		err := os.Mkdir(manifestPath, os.FileMode.Perm(0755))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := createConfig(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := createSecret(); err != nil {
+		t.Fatal(err)
+	}
+
+	pollTime, _ := time.ParseDuration("15s")
+	timeOut, _ := time.ParseDuration("5m")
+
+	fixture := acmetest.NewFixture(&desecDNSProviderSolver{},
+		acmetest.SetDNSName(zone),
+		acmetest.SetDNSServer("ns2.desec.org:53"),
+		acmetest.SetResolvedZone(zone),
+		acmetest.SetAllowAmbientCredentials(false),
+		acmetest.SetManifestPath(manifestPath),
+		acmetest.SetPollInterval(pollTime),
+		acmetest.SetPropagationLimit(timeOut),
+		acmetest.SetStrict(true),
 	)
-	//need to uncomment and  RunConformance delete runBasic and runExtended once https://github.com/cert-manager/cert-manager/pull/4835 is merged
-	//fixture.RunConformance(t)
-	fixture.RunBasic(t)
-	fixture.RunExtended(t)
 
+	fixture.RunConformance(t)
 }
