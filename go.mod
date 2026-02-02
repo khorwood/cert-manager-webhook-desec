@@ -3,7 +3,7 @@ module github.com/khorwood/cert-manager-webhook-desec
 go 1.24.0
 
 require (
-	github.com/cert-manager/cert-manager v1.18.2
+	github.com/cert-manager/cert-manager v1.18.5
 	github.com/nrdcg/desec v0.11.0
 	k8s.io/apiextensions-apiserver v0.32.0
 	k8s.io/apimachinery v0.32.0
